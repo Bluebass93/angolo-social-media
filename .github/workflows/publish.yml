@@ -1,0 +1,37 @@
+name: Pubblica post social
+
+on:
+  workflow_dispatch: {}
+
+permissions:
+  contents: write
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install dependencies
+        run: pip install requests
+
+      - name: Pubblica su Instagram e Facebook
+        env:
+          IG_BUSINESS_ACCOUNT_ID: ${{ secrets.IG_BUSINESS_ACCOUNT_ID }}
+          PAGE_ID: ${{ secrets.PAGE_ID }}
+          PAGE_ACCESS_TOKEN: ${{ secrets.PAGE_ACCESS_TOKEN }}
+        run: python scripts/publish.py
+
+      - name: Svuota pending/ dopo la pubblicazione
+        run: |
+          git config user.name "angolo-cappotto-bot"
+          git config user.email "actions@users.noreply.github.com"
+          git rm -r --ignore-unmatch pending/*
+          touch pending/.gitkeep
+          git add pending/.gitkeep
+          git commit -m "Post pubblicato, pending/ svuotata" || echo "niente da pulire"
+          git push
