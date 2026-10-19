@@ -99,7 +99,7 @@ def test_facebook():
     photo_id = photo["id"]
     print(f"  foto creata (non pubblica): {photo_id}")
 
-    check = graph_get(photo_id, fields="id,is_published")
+    check = graph_get(photo_id, fields="id")
     print(f"  verifica: {check}")
 
     graph_delete(photo_id)

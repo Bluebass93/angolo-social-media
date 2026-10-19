@@ -1,0 +1,19 @@
+name: Cancella foto per ID (utility di pulizia)
+
+on:
+  workflow_dispatch:
+    inputs:
+      photo_id:
+        description: "ID della foto Facebook da cancellare"
+        required: true
+
+jobs:
+  delete:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Cancella foto
+        env:
+          PAGE_ACCESS_TOKEN: ${{ secrets.PAGE_ACCESS_TOKEN }}
+          PHOTO_ID: ${{ github.event.inputs.photo_id }}
+        run: |
+          curl -s -X DELETE "https://graph.facebook.com/v21.0/${PHOTO_ID}?access_token=${PAGE_ACCESS_TOKEN}"
