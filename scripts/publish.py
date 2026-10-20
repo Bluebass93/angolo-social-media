@@ -9,7 +9,8 @@ Convenzione cartella pending/:
   pending/caption_ig.txt   (caption per Instagram, carosello completo)
   pending/caption_fb.txt   (caption per Facebook, "carosello in prosa")
 
-La prima immagine (non video) in ordine alfabetico è anche quella usata per il post Facebook
+Facoltativo: pending/fb-cover.png = copertina solo per Facebook (non entra nel carosello Instagram).
+Se non c'è, per Facebook si usa la prima immagine (non video) in ordine alfabetico
 (deve essere la variante cover senza "Scorri ->", vedi reference_carosello_instagram_template).
 """
 import os
@@ -27,6 +28,7 @@ TOKEN = os.environ["PAGE_ACCESS_TOKEN"]
 PENDING_DIR = "pending"
 IMAGE_EXT = (".webp", ".jpg", ".jpeg", ".png")
 VIDEO_EXT = (".mp4", ".mov")
+FB_COVER_PREFIX = "fb-cover"  # facoltativo: copertina solo per Facebook (non è una slide Instagram)
 
 
 def raw_url(filename):
@@ -72,11 +74,12 @@ def wait_until_finished(creation_id, timeout_s=120):
 def main():
     images = sorted(
         f for f in os.listdir(PENDING_DIR)
-        if f.lower().endswith(IMAGE_EXT + VIDEO_EXT)
+        if f.lower().endswith(IMAGE_EXT + VIDEO_EXT) and not f.lower().startswith(FB_COVER_PREFIX)
     )
     if not images:
         fail(f"Nessuna immagine trovata in {PENDING_DIR}/")
-    cover = next((f for f in images if f.lower().endswith(IMAGE_EXT)), None)
+    fb_cover = next((f for f in sorted(os.listdir(PENDING_DIR)) if f.lower().startswith(FB_COVER_PREFIX)), None)
+    cover = fb_cover or next((f for f in images if f.lower().endswith(IMAGE_EXT)), None)
     if cover is None:
         fail("Serve almeno un'immagine (copertina) in pending/")
 
