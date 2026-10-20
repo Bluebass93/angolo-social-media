@@ -4,10 +4,12 @@ Pubblica il carosello in pending/ su Instagram e Facebook.
 
 Convenzione cartella pending/:
   pending/01-xxx.webp, 02-xxx.webp, ... (ordine alfabetico = ordine slide)
+  Le slide possono essere anche video: pending/03-xxx.mp4 (H.264, senza audio va bene).
+  Una slide = un solo file (immagine OPPURE video, non entrambi).
   pending/caption_ig.txt   (caption per Instagram, carosello completo)
   pending/caption_fb.txt   (caption per Facebook, "carosello in prosa")
 
-La prima immagine in ordine alfabetico è anche quella usata per il post Facebook
+La prima immagine (non video) in ordine alfabetico è anche quella usata per il post Facebook
 (deve essere la variante cover senza "Scorri ->", vedi reference_carosello_instagram_template).
 """
 import os
@@ -23,6 +25,8 @@ PAGE_ID = os.environ["PAGE_ID"]
 TOKEN = os.environ["PAGE_ACCESS_TOKEN"]
 
 PENDING_DIR = "pending"
+IMAGE_EXT = (".webp", ".jpg", ".jpeg", ".png")
+VIDEO_EXT = (".mp4", ".mov")
 
 
 def raw_url(filename):
@@ -68,10 +72,13 @@ def wait_until_finished(creation_id, timeout_s=120):
 def main():
     images = sorted(
         f for f in os.listdir(PENDING_DIR)
-        if f.lower().endswith((".webp", ".jpg", ".jpeg", ".png"))
+        if f.lower().endswith(IMAGE_EXT + VIDEO_EXT)
     )
     if not images:
         fail(f"Nessuna immagine trovata in {PENDING_DIR}/")
+    cover = next((f for f in images if f.lower().endswith(IMAGE_EXT)), None)
+    if cover is None:
+        fail("Serve almeno un'immagine (copertina) in pending/")
 
     caption_ig_path = os.path.join(PENDING_DIR, "caption_ig.txt")
     caption_fb_path = os.path.join(PENDING_DIR, "caption_fb.txt")
@@ -85,12 +92,23 @@ def main():
 
     # --- Instagram: carosello ---
     if len(images) == 1:
+        if images[0].lower().endswith(VIDEO_EXT):
+            fail("Un post con un solo file deve essere un'immagine")
         creation = graph_post(f"{IG_ID}/media", image_url=raw_url(images[0]), caption=caption_ig)
         ig_container_id = creation["id"]
     else:
         child_ids = []
         for img in images:
-            child = graph_post(f"{IG_ID}/media", image_url=raw_url(img), is_carousel_item="true")
+            if img.lower().endswith(VIDEO_EXT):
+                child = graph_post(
+                    f"{IG_ID}/media",
+                    media_type="VIDEO",
+                    video_url=raw_url(img),
+                    is_carousel_item="true",
+                )
+                wait_until_finished(child["id"], timeout_s=300)
+            else:
+                child = graph_post(f"{IG_ID}/media", image_url=raw_url(img), is_carousel_item="true")
             child_ids.append(child["id"])
             print(f"  slide {img} -> container {child['id']}")
 
@@ -107,7 +125,7 @@ def main():
     print(f"Instagram pubblicato: media id {published['id']}")
 
     # --- Facebook: solo la prima immagine (cover), caption in prosa ---
-    fb_post = graph_post(f"{PAGE_ID}/photos", url=raw_url(images[0]), caption=caption_fb)
+    fb_post = graph_post(f"{PAGE_ID}/photos", url=raw_url(cover), caption=caption_fb)
     print(f"Facebook pubblicato: post id {fb_post.get('post_id', fb_post.get('id'))}")
 
     print("OK")

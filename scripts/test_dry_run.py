@@ -20,6 +20,7 @@ PAGE_ID = os.environ["PAGE_ID"]
 TOKEN = os.environ["PAGE_ACCESS_TOKEN"]
 
 TEST_IMAGES = ["dry-run-1.png", "dry-run-2.png"]
+TEST_VIDEO = "dry-run-3.mp4"
 
 
 def raw_url(filename):
@@ -76,6 +77,16 @@ def test_instagram():
         child = graph_post(f"{IG_ID}/media", image_url=raw_url(img), is_carousel_item="true")
         child_ids.append(child["id"])
         print(f"  slide {img} -> container {child['id']}")
+    # slide video (stesso percorso di publish.py per i file .mp4)
+    vchild = graph_post(
+        f"{IG_ID}/media",
+        media_type="VIDEO",
+        video_url=raw_url(TEST_VIDEO),
+        is_carousel_item="true",
+    )
+    print(f"  slide video {TEST_VIDEO} -> container {vchild['id']}")
+    wait_until_finished(vchild["id"], timeout_s=300)
+    child_ids.append(vchild["id"])
 
     container = graph_post(
         f"{IG_ID}/media",
