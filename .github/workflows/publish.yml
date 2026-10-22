@@ -1,10 +1,22 @@
 name: Pubblica post social
 
 on:
-  workflow_dispatch: {}
+  workflow_dispatch:
+    inputs:
+      dry_run:
+        description: "Simulazione: nessuna chiamata a Instagram/Facebook, nessun commit"
+        type: boolean
+        default: false
+  schedule:
+    - cron: "*/5 * * * *"   # controlla ogni 5 minuti i post programmati (publish_at)
 
 permissions:
   contents: write
+
+# Un solo run alla volta: evita doppie pubblicazioni da run concorrenti
+concurrency:
+  group: pubblica-post-social
+  cancel-in-progress: false
 
 jobs:
   publish:
@@ -12,26 +24,45 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      - name: Esci subito se non c'e' nulla da fare (cron)
+        id: gate
+        run: |
+          # Il cron non deve costare nulla se non ci sono post programmati in coda
+          if [ "${{ github.event_name }}" = "schedule" ] && ! ls pending/*/post.json >/dev/null 2>&1; then
+            echo "run=false" >> "$GITHUB_OUTPUT"; echo "Nessun post programmato"
+          else
+            echo "run=true" >> "$GITHUB_OUTPUT"
+          fi
+
       - uses: actions/setup-python@v5
+        if: steps.gate.outputs.run == 'true'
         with:
           python-version: "3.12"
 
       - name: Install dependencies
+        if: steps.gate.outputs.run == 'true'
         run: pip install requests
 
       - name: Pubblica su Instagram e Facebook
+        if: steps.gate.outputs.run == 'true'
         env:
           IG_BUSINESS_ACCOUNT_ID: ${{ secrets.IG_BUSINESS_ACCOUNT_ID }}
           PAGE_ID: ${{ secrets.PAGE_ID }}
           PAGE_ACCESS_TOKEN: ${{ secrets.PAGE_ACCESS_TOKEN }}
-        run: python scripts/publish.py
+          DRY_RUN: ${{ inputs.dry_run && '1' || '0' }}
+        run: |
+          if [ "${{ github.event_name }}" = "schedule" ]; then MODE=scheduled; else MODE=all; fi
+          python scripts/publish.py "$MODE"
 
-      - name: Svuota pending/ dopo la pubblicazione
+      # Gira SEMPRE (anche dopo un errore) per salvare lo stato: niente doppioni al retry.
+      - name: Salva stato (commit)
+        if: always() && steps.gate.outputs.run == 'true' && inputs.dry_run != true
         run: |
           git config user.name "angolo-cappotto-bot"
           git config user.email "actions@users.noreply.github.com"
-          git rm -r --ignore-unmatch pending/*
           touch pending/.gitkeep
-          git add pending/.gitkeep
-          git commit -m "Post pubblicato, pending/ svuotata" || echo "niente da pulire"
+          git add -A pending
+          if [ -d published ]; then git add -A published; fi
+          git commit -m "Stato pubblicazioni aggiornato" || { echo "niente da salvare"; exit 0; }
+          git pull --rebase origin "${GITHUB_REF_NAME}"
           git push
