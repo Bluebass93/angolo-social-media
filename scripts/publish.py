@@ -29,6 +29,9 @@ import time
 from datetime import datetime
 from zoneinfo import ZoneInfo
 
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+from notify import notify, one_line
+
 try:
     import requests
 except ImportError:  # serve solo per le chiamate reali (non in DRY_RUN)
@@ -205,6 +208,45 @@ def publish_post(folder, base, state, save):
         print(f"Facebook pubblicato: post id {state['fb_post_id']}")
 
 
+def post_title(folder, name):
+    try:
+        return str(read_json(os.path.join(folder, "post.json"), {}).get("title") or name)
+    except Exception:
+        return name
+
+
+def channels_done(state):
+    return " + ".join(c for c, k in (("Instagram", "ig_media_id"), ("Facebook", "fb_post_id")) if state.get(k)) or "nessuno"
+
+
+def links(state):
+    out = []
+    try:
+        if state.get("fb_post_id") and not DRY_RUN:
+            out.append(f"Facebook: https://www.facebook.com/{state['fb_post_id']}")
+        if state.get("ig_media_id") and not DRY_RUN:
+            out.append("Instagram: " + graph_get(state["ig_media_id"], fields="permalink").get("permalink", ""))
+    except Exception:
+        pass
+    return ("\n" + "\n".join(out)) if out else ""
+
+
+def notify_ok(title, state):
+    notify(f"Pubblicato: {title}\nCanali: {channels_done(state)}{links(state)}\nOra: {now_rome():%d/%m/%Y %H:%M}")
+
+
+def notify_error(title, state, err, attempt):
+    """Un solo messaggio per tentativo fallito; l'ultimo dice che il post e' marcato failed."""
+    missing = [n for n, k in (("Instagram", "ig_media_id"), ("Facebook", "fb_post_id")) if not state.get(k)]
+    msg = (f"PROBLEMA pubblicazione: {title}\nCanale in errore: {' + '.join(missing)}"
+           f" (gia' ok: {channels_done(state)})\nErrore: {one_line(err)}\nTentativo {attempt}/{MAX_ATTEMPTS}")
+    if attempt >= MAX_ATTEMPTS:
+        msg += f"\nIl post e' marcato failed ({now_rome():%d/%m/%Y %H:%M}): non riprovo piu', serve il tuo intervento."
+    else:
+        msg += "\nRiprovo al prossimo giro (circa 5 minuti)."
+    notify(msg)
+
+
 def run_flat():
     """Comportamento storico: file direttamente in pending/ (solo lancio manuale)."""
     if not os.path.isdir(PENDING_DIR):
@@ -218,7 +260,12 @@ def run_flat():
         return
     state_path = os.path.join(PENDING_DIR, "state.json")  # evita doppioni se un canale fallisce
     state = read_json(state_path, {})
-    publish_post(PENDING_DIR, PENDING_DIR, state, lambda: write_json(state_path, state))
+    try:
+        publish_post(PENDING_DIR, PENDING_DIR, state, lambda: write_json(state_path, state))
+    except Exception as e:
+        notify_error("post manuale", state, e, 1)
+        raise
+    notify_ok("post manuale", state)
     if not DRY_RUN:  # svuota pending/ (solo file diretti, le sottocartelle programmate restano)
         for f in os.listdir(PENDING_DIR):
             fp = os.path.join(PENDING_DIR, f)
@@ -270,11 +317,13 @@ def run_scheduled():
                 state["status"] = "failed"
             save()
             print(f"[{name}] ERRORE: {e}", file=sys.stderr)
+            notify_error(post_title(folder, name), state, e, state["attempts"])
             ok = False
             continue
         state["status"] = "published"
         state["published_at"] = now.isoformat()
         save()
+        notify_ok(post_title(folder, name), state)
         if not DRY_RUN:
             os.makedirs(PUBLISHED_DIR, exist_ok=True)
             shutil.move(folder, os.path.join(PUBLISHED_DIR, name))

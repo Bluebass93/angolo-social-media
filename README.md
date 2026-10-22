@@ -33,3 +33,11 @@ solo quello mancante. Dopo 3 tentativi falliti il post e' marcato `failed` in `s
 
 **Manuale**: i file messi direttamente in `pending/` e il lancio manuale di "Pubblica post social"
 funzionano come prima. Il lancio manuale ha l'opzione `dry_run` (simulazione, nessuna pubblicazione).
+
+## Notifiche Telegram (facoltative)
+
+1. Su Telegram apri @BotFather, invia `/newbot`, scegli nome e username: ti da' il token.
+2. Apri il tuo nuovo bot e scrivigli `/start` (senza questo non puo' scriverti).
+3. Apri `https://api.telegram.org/bot<TOKEN>/getUpdates`: il tuo chat id e' in `message.chat.id`.
+4. Repo > Settings > Secrets and variables > Actions: crea `TELEGRAM_BOT_TOKEN` e `TELEGRAM_CHAT_ID`.
+5. Fatto: messaggio a ogni post pubblicato e a ogni tentativo fallito (con n/3 e avviso di `failed`). Senza secret il bot tace; un errore Telegram non blocca mai la pubblicazione.
