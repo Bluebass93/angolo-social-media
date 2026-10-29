@@ -1,0 +1,4 @@
+{
+  "attempts": 1,
+  "last_error": "POST /17841431757598619/media -> {'message': 'Error validating access token: The session has been invalidated because the user changed their password or Facebook has changed the session for security reasons.', 'type': 'OAuthException', 'code': 190, 'error_subcode': 460, 'fbtrace_id': 'Ax7X9z5kisgy7RcY9Cs15Ta'}"
+}
